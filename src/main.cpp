@@ -27,6 +27,10 @@ NTPClient timeClient(ntpUDP, "time.google.com", 7 * 3600);
 #define XPT2046_CLK 25
 #define XPT2046_CS 33
 
+#define MAX_TOUCH_X 3700
+#define MIN_TOUCH_X 300
+#define MAX_TOUCH_Y 3700
+#define MIN_TOUCH_Y 200
 SPIClass touchscreenSPI = SPIClass(VSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 TFT_eSprite screen = TFT_eSprite(&tft);
@@ -257,8 +261,8 @@ String keyboard(String title = "Input:", String initText = "") {
 
     if (touchscreen.touched() && !holding) {
       TS_Point p = touchscreen.getPoint();
-      int tx = map(p.x, 300, 3800, 0, SCREEN_W);
-      int ty = map(p.y, 200, 3800, 0, SCREEN_H);
+      int tx = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 0, SCREEN_W);
+      int ty = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 0, SCREEN_H);
       holding = true;
 
       if (ty >= row1Y && ty < row1Y + keyH) {
@@ -344,8 +348,8 @@ int navigation(bool is_home = false, bool is_option = false) {
   }
   if (touchscreen.touched() && !antiML) {
     TS_Point p = touchscreen.getPoint();
-    int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-    int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+    int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+    int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
     if (px >= 0 && px <= 80 && py >= 280 && py <= 320) {
       antiML = true;
       return 0;
@@ -371,8 +375,8 @@ void setting() {
     screen.fillRect(10 + lsld, 140, 20, 20, TFT_WHITE);
     if (touchscreen.touched()) {
       TS_Point p = touchscreen.getPoint();
-      int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-      int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+      int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+      int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
       if (140 < py && py < 160) lsld = px - 10;
     }
     lsld = constrain(lsld, 0, 200);
@@ -403,8 +407,8 @@ int mainMenu() { // Main Menu (or launcher idk)
     if (touchscreen.touched() && !hld) {
       hld = true;
       TS_Point p = touchscreen.getPoint();
-      int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-      int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+      int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+      int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
       int bt = clickButton(px, py, buttons, 6);
       if (bt == 0) {
         choosing = false;
@@ -478,8 +482,8 @@ bool button(String text, int x, int y, int l, int color = TFT_WHITE, int size = 
   screen.drawCentreString(text, x + l / 2, y + 2, size);
   if (touchscreen.touched() && !antiML) {
     TS_Point p = touchscreen.getPoint();
-    int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-    int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+    int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+    int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
     if (x < px && px < x + l && y < py && py < y + fh + 6) {
       antiML = true;
       return true;
@@ -496,31 +500,27 @@ int terminalLine = 0;
 
 void terminalPrint(String input) {
   if (input == "") return;
-  String lines[MAX_LINES];  // Mảng tạm để chứa các dòng cần in
+  String lines[MAX_LINES];
   int lineCount = 0;
   
   int start = 0;
   while (start < input.length()) {
-    // Tìm vị trí kết thúc dòng (tối đa 40 ký tự)
     int end = min(start + MAX_WIDTH, input.length());
 
-    // Kiểm tra nếu có xuống dòng '\n' trong khoảng cần cắt
     int newlinePos = input.indexOf('\n', start);
     if (newlinePos != -1 && newlinePos < end) {
-      end = newlinePos;  // Cắt dòng tại vị trí xuống dòng
+      end = newlinePos;
     }
 
     lines[lineCount++] = input.substring(start, end);
 
-    // Nếu cắt tại '\n', bỏ qua nó
     if (input.charAt(end) == '\n') {
       start = end + 1;
     } else {
-      start = end;  // Di chuyển đến phần tiếp theo mà không bỏ sót ký tự nào
+      start = end;
     }
   }
 
-  // Đẩy dữ liệu vào terminal buffer
   for (int i = 0; i < lineCount; i++) {
     if (terminalLine < MAX_LINES) {
       terminal[terminalLine++] = lines[i];
@@ -532,7 +532,6 @@ void terminalPrint(String input) {
     }
   }
 
-  // Hiển thị trên màn hình
   tft.setCursor(0, 0);
   for (int i = max(0, terminalLine - MAX_LINES); i < terminalLine; i++) {
     tft.fillRect(0, i * 8, 240, 8, TFT_BLACK);
@@ -564,12 +563,12 @@ void sendDeauth(uint8_t *bssid, uint8_t reason) {
 
 void loadFirmwareFromSD(const char* path) {
   if (!SD.begin(SD_CS)) {
-    Serial.println("Không thể khởi động SD Card!");
+    Serial.println("SD Card Disconnected!");
     return;
   }
   File firmware = SD.open(path);
   if (!firmware) {
-      Serial.println("Không tìm thấy firmware trên thẻ SD!");
+      Serial.println("Can't find firmware on SD card!");
       return;
   }
 
@@ -577,7 +576,7 @@ void loadFirmwareFromSD(const char* path) {
   const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
 
   if (esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle) != ESP_OK) {
-      Serial.println("Lỗi OTA begin");
+      Serial.println("OTA begin Error");
       return;
   }
 
@@ -590,7 +589,7 @@ void loadFirmwareFromSD(const char* path) {
   esp_ota_end(ota_handle);
   esp_ota_set_boot_partition(update_partition);
 
-  Serial.println("Nạp firmware từ SD xong, khởi động lại...");
+  Serial.println("Firmware loaded, restarting...");
   ESP.restart();
 }
 
@@ -609,31 +608,134 @@ typedef struct {
   uint8_t payload[0];
 } wifi_ieee80211_packet_t;
 
-void lookAround(void* buf, wifi_promiscuous_pkt_type_t type) { // there thing is hopeless
+typedef struct {
+  uint8_t id;
+  uint8_t len;
+  uint8_t data[0];
+} wifi_ieee80211_info_element_t;
+
+struct newold {
+  int ov;
+  int nv;
+};
+
+newold sniffManage =  {0, 0};
+newold sniffControl = {0, 0};
+newold sniffData =    {0, 0};
+newold sniffMisc =    {0, 0};
+newold sniffUnknown = {0, 0};
+newold sniffProbe =   {0, 0};
+newold sniffBeacon =  {0, 0};
+newold sniffDeaunth = {0, 0};
+
+String history[5] = {""};
+String shistory[5] = {""};
+int historyLine = 0;
+int shistoryLine = 0;
+
+void lookAround(void* buf, wifi_promiscuous_pkt_type_t type) {
   wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
   wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)pkt->payload;
   wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
+  uint16_t frame_ctrl = hdr->frame_ctrl;
 
-  // Print to serial
-  Serial.printf("Packet type: %d, RSSI: %d\n", type, pkt->rx_ctrl.rssi);
-  Serial.printf("Source MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
-                hdr->addr2[3], hdr->addr2[4], hdr->addr2[5]);
   char buffer[128];
-  sprintf(buffer, "Packet type: %d, RSSI: %d\n", type, pkt->rx_ctrl.rssi);
-  terminalPrint(buffer);
-  sprintf(buffer, "Source MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
-                hdr->addr2[3], hdr->addr2[4], hdr->addr2[5]);
-  terminalPrint(buffer);
+  char ssid[33] = ""; // SSID có thể dài tối đa 32 ký tự + 1 ký tự null
+
+  if ((frame_ctrl & 0x00F0) == 0x0080) {
+    // Beacon frame
+    sniffBeacon.nv++;
+    uint8_t *payload = ipkt->payload + 12; // Bỏ qua phần fixed parameters (12 bytes)
+    int payload_len = pkt->rx_ctrl.sig_len - sizeof(wifi_ieee80211_mac_hdr_t) - 12;
+    while (payload_len > 2) {
+      wifi_ieee80211_info_element_t *ie = (wifi_ieee80211_info_element_t *)payload;
+      if (ie->id == 0) { // SSID element
+        int len = min(ie->len, 32);
+        memcpy(ssid, ie->data, len);
+        ssid[len] = '\0';
+        break;
+      }
+      payload += ie->len + 2;
+      payload_len -= ie->len + 2;
+    }
+    snprintf(buffer, sizeof(buffer), "B%d:%02X:%02X:%02X:%02X:%02X:%02X->%s",
+             pkt->rx_ctrl.rssi, hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
+             hdr->addr2[3], hdr->addr2[4], hdr->addr2[5], ssid);
+  } else if ((frame_ctrl & 0x00F0) == 0x0040) {
+    // Probe request frame
+    sniffProbe.nv++;
+    uint8_t *payload = ipkt->payload;
+    int payload_len = pkt->rx_ctrl.sig_len - sizeof(wifi_ieee80211_mac_hdr_t);
+    while (payload_len > 2) {
+      wifi_ieee80211_info_element_t *ie = (wifi_ieee80211_info_element_t *)payload;
+      if (ie->id == 0) { // SSID element
+        int len = min(ie->len, 32);
+        memcpy(ssid, ie->data, len);
+        ssid[len] = '\0';
+        break;
+      }
+      payload += ie->len + 2;
+      payload_len -= ie->len + 2;
+    }
+    snprintf(buffer, sizeof(buffer), "P%d:%02X:%02X:%02X:%02X:%02X:%02X->%s",
+             pkt->rx_ctrl.rssi, hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
+             hdr->addr2[3], hdr->addr2[4], hdr->addr2[5], ssid);
+  } else if ((frame_ctrl & 0x00F0) == 0x00C0) {
+    // Deauthentication frame
+    sniffDeaunth.nv++;
+    snprintf(buffer, sizeof(buffer), "D%d:%02X:%02X:%02X:%02X:%02X:%02X",
+             pkt->rx_ctrl.rssi, hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
+             hdr->addr2[3], hdr->addr2[4], hdr->addr2[5]);
+  }
+
+  // Add to shistory
+  if (shistoryLine < 5) {
+    shistory[shistoryLine++] = buffer;
+  } else {
+    for (int i = 0; i < 4; i++) {
+      shistory[i] = shistory[i + 1];
+    }
+    shistory[4] = buffer;
+  }
+
+  // Add RSSI, type and Source Mac to history
+  snprintf(buffer, sizeof(buffer), "R:%d, T:%d, MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+           pkt->rx_ctrl.rssi, type, hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
+           hdr->addr2[3], hdr->addr2[4], hdr->addr2[5]);
+  if (historyLine < 5) {
+    history[historyLine++] = buffer;
+  } else {
+    for (int i = 0; i < 4; i++) {
+      history[i] = history[i + 1];
+    }
+    history[4] = buffer;
+  }
+
+  switch (type) {
+    case WIFI_PKT_MGMT:
+      sniffManage.nv++;
+      break;
+    case WIFI_PKT_CTRL:
+      sniffControl.nv++;
+      break;
+    case WIFI_PKT_DATA:
+      sniffData.nv++;
+      break;
+    case WIFI_PKT_MISC:
+      sniffMisc.nv++;
+      break;
+    default:
+      sniffUnknown.nv++;
+      break;
+  }
 }
 
 void appWifi() {
   bool in_use = true, apRun = false;
   int wl_near = 0, sel = -1,
   scrOfst = 0, dy = 0, lastY = 0,
-  ffr = 120, ftp = 0, adt = 0;
-  bool isScrolling = false, tradv = false;
+  ffr = 120;
+  bool isScrolling = false;
   WiFi.mode(WIFI_STA);
 
   while (in_use) {
@@ -642,17 +744,8 @@ void appWifi() {
     int navi = navigation(false, true);
     if (navi == 0 || navi == 1) {
       in_use = false;
-    } else if (navi == 2) {
-      if (!tradv) {
-        tradv = true;
-        adt = millis();
-      } else ftp++;
-    }
-    if (tradv && millis() - adt > 3000) {
-      if (ftp < 10) {
-        tradv = false;
-        ftp = 0;
-      } else {
+      }
+    if (digitalRead(0) == LOW && navi == 2) {
         bool advan = true;
         tft.fillScreen(TFT_BLACK);
         tft.setTextColor(TFT_RED, TFT_BLACK);
@@ -919,28 +1012,119 @@ void appWifi() {
           }
           case 5: {
             terminalPrint("Sniffer Selected!");
+            terminalPrint("Select delay frame (default 50ms):");
+            int delayFrame = 50;
+            int touchStart = 0;
+            bool holding = false;
+            while (true) {
+              if (digitalRead(0) == LOW && !holding) {
+                holding = true;
+                touchStart = millis();
+              } if (digitalRead(0) == HIGH && holding) {
+                holding = false;
+                if (millis() - touchStart < 1000) {
+                  delayFrame = (delayFrame + 50) % 550;
+                  terminalPrint("Selected delay frame: " + String(delayFrame) + "ms");
+                } else {
+                  break;
+                }
+              }
+            }
+            terminalPrint("Setting delay frame to " + String(delayFrame) + "ms");
             terminalPrint("Starting sniffer...");
             esp_wifi_set_promiscuous(true);
             esp_wifi_set_promiscuous_rx_cb(lookAround);
-            terminalPrint("Sniffer started, hold [TOUCH] to stop");
+            terminalPrint("Sniffer started, launching viewer...");
+            int lineY[8] = {200}; 
+            bool viewMerge = true,
+            pausE = false, hld = false;
+            int cursor = 0, spF = 4;
+            screen.setTextColor(TFT_WHITE);
+            screen.fillScreen(TFT_BLACK);
             while (true) {
-              delay(200);
-              if (touchscreen.touched()) {
-                unsigned long abortStart = millis();
-                while (touchscreen.touched()) {
-                  if (millis() - abortStart > 5000) {
-                    terminalPrint("Abort signal detected. Restarting device...");
-                    delay(1000);
-                    ESP.restart();
-                  }
-                  delay(50);
+              screen.fillRect(0, 200, 240, 120, TFT_BLACK);
+              screen.fillRect(0, 0, 240, 50, TFT_BLACK);
+              screen.fillRect(0, 0, 20, 10, TFT_BLUE);
+              screen.drawString(": Manage", 22, 0, 1);
+              screen.fillRect(0, 10, 20, 10, TFT_DARKCYAN);
+              screen.drawString(": Control", 22, 10, 1);
+              screen.fillRect(0, 20, 20, 10, TFT_YELLOW);
+              screen.drawString(": Data", 22, 20, 1);
+              screen.fillRect(0, 30, 20, 10, TFT_PURPLE);
+              screen.drawString(": Misc", 22, 30, 1);
+              screen.fillRect(0, 40, 20, 10, TFT_DARKGREY);
+              screen.drawString(": Unknown", 22, 40, 1);
+              screen.fillRect(80, 0, 20, 10, TFT_GREEN);
+              screen.drawString(": Probe", 102, 0, 1);
+              screen.fillRect(80, 10, 20, 10, TFT_CYAN);
+              screen.drawString(": Beacon", 102, 10, 1);
+              screen.fillRect(80, 20, 20, 10, TFT_RED);
+              screen.drawString(": Deauth", 102, 20, 1);
+              screen.drawString(viewMerge ? "Merge" : "Split", 200, 2, 1);
+              if (pausE) screen.drawString("Pausing", 200, 2, 1);
+              screen.drawLine(cursor, 51, cursor, 200, TFT_BLACK);
+              screen.drawLine(cursor, lineY[0] - spF * sniffManage.nv , cursor, lineY[0] - spF * sniffManage.ov, TFT_BLUE);
+              screen.drawLine(cursor, lineY[1] - spF * sniffControl.nv, cursor, lineY[1] - spF * sniffControl.ov, TFT_DARKCYAN);
+              screen.drawLine(cursor, lineY[2] - spF * sniffData.nv   , cursor, lineY[2] - spF * sniffData.ov, TFT_YELLOW);
+              screen.drawLine(cursor, lineY[3] - spF * sniffMisc.nv   , cursor, lineY[3] - spF * sniffMisc.ov, TFT_PURPLE);
+              screen.drawLine(cursor, lineY[4] - spF * sniffUnknown.nv, cursor, lineY[4] - spF * sniffUnknown.ov, TFT_DARKGREY);
+              screen.drawLine(cursor, lineY[5] - spF * sniffProbe.nv  , cursor, lineY[5] - spF * sniffProbe.ov, TFT_GREEN);
+              screen.drawLine(cursor, lineY[6] - spF * sniffBeacon.nv , cursor, lineY[6] - spF * sniffBeacon.ov, TFT_CYAN);
+              screen.drawLine(cursor, lineY[7] - spF * sniffDeaunth.nv, cursor, lineY[7] - spF * sniffDeaunth.ov, TFT_RED);
+              screen.drawLine(cursor, 200, cursor, 205, TFT_WHITE);
+              screen.drawLine(0, 50, 240, 50, TFT_WHITE);
+              screen.drawLine(0, 200, 240, 200, TFT_WHITE);
+              sniffManage.ov = sniffManage.nv;
+              sniffControl.ov = sniffControl.nv;
+              sniffData.ov = sniffData.nv;
+              sniffMisc.ov = sniffMisc.nv;
+              sniffUnknown.ov = sniffUnknown.nv;
+              sniffProbe.ov = sniffProbe.nv;
+              sniffBeacon.ov = sniffBeacon.nv;
+              sniffDeaunth.ov = sniffDeaunth.nv;
+              sniffManage.nv = 0;
+              sniffControl.nv = 0;
+              sniffData.nv = 0;
+              sniffMisc.nv = 0;
+              sniffUnknown.nv = 0;
+              sniffProbe.nv = 0;
+              sniffBeacon.nv = 0;
+              sniffDeaunth.nv = 0;
+              if (!pausE) cursor = (cursor + 1) % 240;
+              if (digitalRead(0) == LOW && !hld) {
+                hld = true;
+                viewMerge = !viewMerge;
+                if (viewMerge) {
+                  for (int i = 0; i < 8; i++) lineY[i] = 200;
+                  spF = 4;
+                }
+                else {
+                  for (int i = 0; i < 8; i++) {
+                    lineY[i] = 68.0 + (i * 130.0) / 7.0;
+                  } spF = 1;
                 }
               }
+              if (digitalRead(0) == HIGH && hld) {
+                hld = false;
+              }
+              //screen.setTextColor(TFT_WHITE);
+              for (int i = 0; i < 5; i++) {
+                screen.drawString(history[i], 2, 210 + i * 10, 1);
+              }
+              for (int i = 0; i < 5; i++) {
+                if (shistory[i].substring(0, 1) == "B") screen.setTextColor(TFT_CYAN);
+                else if (shistory[i].substring(0, 1) == "P") screen.setTextColor(TFT_GREEN);
+                else if (shistory[i].substring(0, 1) == "D") screen.setTextColor(TFT_RED);
+                else screen.setTextColor(TFT_WHITE);
+                screen.drawString(shistory[i], 2, 270 + i * 10, 1);
+              }
+              screen.setTextColor(TFT_WHITE);
+              screen.pushSprite(0, 0);
+              delay(delayFrame);
             }
             break;
           }
         }
-      }
     }
     if (WiFi.status() == WL_CONNECTED) {
       screen.drawString("WiFi Connected", 10, 40, 4);
@@ -977,8 +1161,8 @@ void appWifi() {
       if (touchscreen.touched()) {
         ffr = 120;
         TS_Point p = touchscreen.getPoint();
-        int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-        int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+        int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+        int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
 
         if (10 < px && px < 230 && 80 < py && py < 236) {
           if (!isScrolling) {
@@ -1106,8 +1290,8 @@ void miscPain() {
     }
     if (touchscreen.touched()) {
       TS_Point p = touchscreen.getPoint();
-      int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-      int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+      int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+      int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
       for (int bx = 0; bx < 10; bx++) {
         tft.fillRect(bx * 24, 0, 24, 20, cbr[bx]);
         if (bx * 24 < px && px < bx * 24 + 24 && py < 20) brs = cbr[bx];
@@ -1226,8 +1410,8 @@ void fileExplorer() {
     if (touchscreen.touched()) {
       ffr = 120;
       TS_Point p = touchscreen.getPoint();
-      int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-      int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+      int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+      int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
       
       if (px > 10 && px < 230 && py > 70 && py < 236) {
         if (!isScrolling) {
@@ -1554,8 +1738,8 @@ void fileExplorer() {
         if (touchscreen.touched()) {
           ffr = 120;
           TS_Point p = touchscreen.getPoint();
-          int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-          int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+          int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+          int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
           if (140 < py && py < 160) sld = px - 10;
         }
         sld = constrain(sld, 0, 200);
@@ -1631,8 +1815,8 @@ void appHotspot() {
         if (touchscreen.touched() && !hld) {
           hld = true;
           TS_Point p = touchscreen.getPoint();
-          int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-          int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+          int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+          int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
           if (100 < py && py < 140) apSSID = keyboard("Access point name (SSID)", apSSID);
           if (180 < py && py < 220) apPass = keyboard("Access point Password", apPass);
         } if (!touchscreen.touched() && hld) hld = false;
@@ -1757,7 +1941,8 @@ int miscMenu() {
     "Drawing Board",
     "Calculator",
     "Light Dependent Resistor",
-    "Tone Pad"
+    "Tone Pad",
+    "Touch Test"
   };
   bool hld = true;
   int py = 0, sel = -1;
@@ -1766,7 +1951,7 @@ int miscMenu() {
     screen.setTextColor(TFT_WHITE, TFT_BLACK);
     screen.drawString("Miscellaneous", 10, 40, 4);
     screen.drawLine(10, 70, 180, 70, TFT_WHITE);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 7; i++) {
       int y = i * 16 + 100;
       if (y < py && py < y + 16) {
         screen.setTextColor(TFT_BLACK, TFT_WHITE);
@@ -1783,7 +1968,7 @@ int miscMenu() {
     if (touchscreen.touched() && !hld) {
       hld = true;
       TS_Point p = touchscreen.getPoint();
-      py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+      py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
     } if (!touchscreen.touched() && hld) hld = false;
     delay(50);
   }
@@ -1801,10 +1986,6 @@ String trm(char* str) {
   return result;
 }
 
-//typedef enum {
-//  NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G, NOTE_Gs, NOTE_A, NOTE_Bb, NOTE_B, NOTE_MAX
-//} note_t;
-
 const String noteName[] = {
 "C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"
 };
@@ -1814,74 +1995,70 @@ NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G, NOTE_Gs, NOTE
 };
 
 void tonePad() {
-// Setup ledc: kênh 6, 5000 Hz, độ phân giải 8 bit
-ledcSetup(6, 5000, 8);
-ledcAttachPin(26, 6);
+  ledcSetup(6, 5000, 8);
+  ledcAttachPin(26, 6);
 
-int currentOctave = 4;  // Quãng tám hiện tại; 3 hàng dưới dùng currentOctave, 3 hàng trên dùng currentOctave+1
+  int currentOctave = 4; 
 
-// Layout grid: 4 cột x 6 hàng (tổng 24 ô = 2 quãng tám)
-const int GRID_COLS = 4;
-const int GRID_ROWS = 6;  // 3 hàng dưới (quãng tám thấp), 3 hàng trên (quãng tám cao)
-const int CELL_SIZE = 50; // tăng kích thước ô để dễ nhìn và dễ chạm
-int gridWidth = GRID_COLS * CELL_SIZE;  // 160px
-int gridHeight = GRID_ROWS * CELL_SIZE; // 240px
+  const int GRID_COLS = 4;
+  const int GRID_ROWS = 6; 
+  const int CELL_SIZE = 50;
+  int gridWidth = GRID_COLS * CELL_SIZE; 
+  int gridHeight = GRID_ROWS * CELL_SIZE;
 
-// Tọa độ đặt grid (nằm giữa màn hình 240x320)
-int gridX = (240 - gridWidth) / 2;  // ví dụ: 40px
-int gridY = 20;  // đặt từ y=60
+  int gridX = (240 - gridWidth) / 2;
+  int gridY = 20; 
 
-// Vòng lặp "Tone Pad": chạy cho đến khi nhấn nút boot (gpio 0)
-bool update = true, toning = false;
-while (digitalRead(0) == HIGH) {
-  if (button("Oct -", 50, 0, 20, TFT_WHITE, 2.5)) {
-    if (currentOctave > 1) currentOctave--;
-    update = true;
-  }
-  if (button("Oct +", 170, 0, 20, TFT_WHITE, 2.5)) {
-    if (currentOctave < 7) currentOctave++;
-    update = true;
-  }
-  if (update) {
-    update = false;
-    screen.fillScreen(TFT_BLACK);
-  
-    button("Oct -", 50, 0, 20, TFT_WHITE, 2.5);
-    button("Oct +", 170, 0, 20, TFT_WHITE, 2.5);
-    screen.setTextColor(TFT_WHITE, TFT_BLACK);
-    screen.drawCentreString("Octave: " + String(currentOctave), 120, 0, 2.5);
+  bool update = true, toning = false;
+  while (digitalRead(0) == HIGH) {
+    if (button("Oct -", 50, 0, 20, TFT_WHITE, 2.5)) {
+      if (currentOctave > 1) currentOctave--;
+      update = true;
+    }
+    if (button("Oct +", 170, 0, 20, TFT_WHITE, 2.5)) {
+      if (currentOctave < 7) currentOctave++;
+      update = true;
+    }
+    if (update) {
+      update = false;
+      screen.fillScreen(TFT_BLACK);
+    
+      button("Oct -", 50, 0, 20, TFT_WHITE, 2.5);
+      button("Oct +", 170, 0, 20, TFT_WHITE, 2.5);
+      screen.setTextColor(TFT_WHITE, TFT_BLACK);
+      screen.drawCentreString("Octave: " + String(currentOctave), 120, 0, 2.5);
 
-    for (int r = 0; r < GRID_ROWS; r++) {
-      int logicalRow = GRID_ROWS - 1 - r; 
-      int octave = (logicalRow < 3) ? currentOctave : currentOctave + 1;
-      for (int c = 0; c < GRID_COLS; c++) {
-        int noteIndex = (logicalRow % 3) * GRID_COLS + c;
-        int cellX = gridX + c * CELL_SIZE;
-        int cellY = gridY + r * CELL_SIZE;
-        screen.drawRect(cellX, cellY, CELL_SIZE, CELL_SIZE, TFT_WHITE);
-        String label = noteName[noteIndex] + String(octave);
-        screen.drawCentreString(label, cellX + CELL_SIZE/2, cellY + CELL_SIZE/2 - 8, 2.5);
+      for (int r = 0; r < GRID_ROWS; r++) {
+        int logicalRow = GRID_ROWS - 1 - r; 
+        int octave = (logicalRow < 3) ? currentOctave : currentOctave + 1;
+        for (int c = 0; c < GRID_COLS; c++) {
+          int noteIndex = (logicalRow % 3) * GRID_COLS + c;
+          int cellX = gridX + c * CELL_SIZE;
+          int cellY = gridY + r * CELL_SIZE;
+          screen.drawRect(cellX, cellY, CELL_SIZE, CELL_SIZE, TFT_WHITE);
+          String label = noteName[noteIndex] + String(octave);
+          screen.drawCentreString(label, cellX + CELL_SIZE/2, cellY + CELL_SIZE/2 - 8, 2.5);
+        }
       }
+
+      screen.pushSprite(0, 0);
     }
 
-    screen.pushSprite(0, 0);
+    if (touchscreen.touched()) {
+      TS_Point p = touchscreen.getPoint();
+      int tx = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+      int ty = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
+      if (tx >= gridX && tx < gridX + gridWidth &&
+          ty >= gridY && ty < gridY + gridHeight) {
+        int col = (tx - gridX) / CELL_SIZE;
+        int row = (ty - gridY) / CELL_SIZE;
+        int logicalRow = GRID_ROWS - 1 - row;
+        int octave = (logicalRow < 3) ? currentOctave : currentOctave + 1;
+        int noteIndex = (logicalRow % 3) * GRID_COLS + col;
+        if (!toning) {ledcWriteNote(6, notes[noteIndex], octave); toning = true;}
+      }
+    } else {ledcWrite(6, 0); toning = false;}
   }
-  
-  if (touchscreen.touched()) {
-    TS_Point p = touchscreen.getPoint();
-    int tx = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-    int ty = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
-    if (tx >= gridX && tx < gridX + gridWidth &&
-        ty >= gridY && ty < gridY + gridHeight) {
-      int col = (tx - gridX) / CELL_SIZE;
-      int row = (ty - gridY) / CELL_SIZE;
-      int logicalRow = GRID_ROWS - 1 - row;  // chuyển về thứ tự từ dưới lên
-      int octave = (logicalRow < 3) ? currentOctave : currentOctave + 1;
-      int noteIndex = (logicalRow % 3) * GRID_COLS + col;
-      if (!toning) {ledcWriteNote(6, notes[noteIndex], octave); toning = true;}
-    }
-  } else {ledcWrite(6, 0); toning = false;}
-}
 }
 
 void miscCalc() {
@@ -1939,8 +2116,8 @@ void miscCalc() {
     if (touchscreen.touched() && !hld) {
       hld = true;
       TS_Point p = touchscreen.getPoint();
-      px = map(p.x, 300, 3800, 0, SCREEN_WIDTH);
-      py = map(p.y, 200, 3800, 0, SCREEN_HEIGHT);
+      px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 0, SCREEN_WIDTH);
+      py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 0, SCREEN_HEIGHT);
     } if (!touchscreen.touched() && hld) hld = false;
     if (tn2) {
       screen.drawString(num2, 240 - screen.textWidth(num2, 6) - 2, 10, 6);
@@ -1985,8 +2162,8 @@ void miscRGB() {
     screen.fillScreen(TFT_BLACK);
     if (touchscreen.touched()) {
       TS_Point p = touchscreen.getPoint();
-      px = map(p.x, 300, 3800, 0, SCREEN_WIDTH);
-      py = map(p.y, 200, 3800, 0, SCREEN_HEIGHT);
+      px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 0, SCREEN_WIDTH);
+      py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 0, SCREEN_HEIGHT);
       for (int i = 0; i < 3; i++)
       if (40 + 60 * i < px && px < 80 + 60 * i && 50 < py && py < 210) leC[i] = constrain(map(py, 60, 200, 255, 0), 0, 255);
       ledColor(leC[0], leC[1], leC[2]);
@@ -2007,6 +2184,35 @@ void miscRGB() {
     screen.pushSprite(0, 0);
     //delay(100);
   }
+}
+
+void miscTouch() {
+  bool inUse = true;
+  int px = 0, py = 0, pz = 0,
+  rx = 0, ry = 0, rz = 0;
+  screen.setTextColor(TFT_WHITE, TFT_BLACK);
+  while (inUse) {
+    screen.fillScreen(TFT_BLACK);
+    screen.drawString("X:" + String(px) + " | Y: " + String(py) + " | Z:" + String(pz), 2, 2, 1);
+    screen.drawString("Raw X:" + String(rx), 2, 12, 1);
+    screen.drawString("Raw Y:" + String(ry), 2, 22, 1);
+    screen.drawString("Raw Z:" + String(rz), 2, 32, 1);
+    if (touchscreen.touched()) {
+      TS_Point p = touchscreen.getPoint();
+      px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+      py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
+      pz = p.z;
+      rx = p.x;
+      ry = p.y;
+      rz = p.z;
+    }
+    screen.drawLine(px, 0, px, 320, TFT_BLUE);
+    screen.drawLine(0, py, 240, py, TFT_RED);
+    screen.drawCircle(px, py, 5, TFT_WHITE);
+    screen.pushSprite(0, 0);
+    if (digitalRead(0) == LOW) inUse = false;
+  }
+  screen.setTextColor(TFT_WHITE, TFT_BLACK);
 }
 
 int gameMenu() {
@@ -2042,7 +2248,7 @@ int gameMenu() {
     if (touchscreen.touched() && !hld) {
       hld = true;
       TS_Point p = touchscreen.getPoint();
-      py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+      py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
     } if (!touchscreen.touched() && hld) hld = false;
     delay(50);
   }
@@ -2173,8 +2379,8 @@ void gameMem() {
           while (!touched) {
             if (touchscreen.touched()) {
               TS_Point p = touchscreen.getPoint();
-              int px = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-              int py = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+              int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+              int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
               if (px >= 10 && px < 230 && py >= 40 && py < 260) {
                 selectedCol = (px - 10) / grd;
                 selectedRow = (py - 40) / grd;
@@ -2497,8 +2703,8 @@ int detectSwipe() {
   static int lastX, lastY;
   if (touchscreen.touched()) {
     TS_Point p = touchscreen.getPoint();
-    int x = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-    int y = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+    int x = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+    int y = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
     if (!swiping) {
       swiping = true;
       startX = x;
@@ -2622,8 +2828,8 @@ void gameSnake() {
     while (!gameOverFlag) {
       if (touchscreen.touched()) {
         TS_Point p = touchscreen.getPoint();
-        int tx = map(p.x, 300, 3800, 1, SCREEN_WIDTH);
-        int ty = map(p.y, 200, 3800, 1, SCREEN_HEIGHT);
+        int tx = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
+        int ty = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
         if (tx >= boardX && tx < boardX + SNAKE_COLS * CELL_SIZE &&
             ty >= boardY && ty < boardY + SNAKE_ROWS * CELL_SIZE) {
           int centerX = boardX + (SNAKE_COLS * CELL_SIZE) / 2;
@@ -2790,7 +2996,8 @@ void loop() {
         case 2: miscPain();   break;
         case 3: miscCalc();   break;
         case 4: miscLDR();    break;
-        case 5: tonePad();   break;
+        case 5: tonePad();    break;
+        case 6: miscTouch();  break;
         default: break;
       }
       break;
