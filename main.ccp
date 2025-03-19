@@ -1,0 +1,1 @@
+platformio.ini lib/XPT2046_Touchscreen lib/TFT_eSPI
