@@ -14,6 +14,7 @@
 #include "deauth.h"
 #include "types.h"
 #include "definitions.h"
+#include <HTTPClient.h>
 
 #define SD_CS 5
 
@@ -29,7 +30,7 @@ NTPClient timeClient(ntpUDP, "time.google.com", 7 * 3600);
 
 #define MAX_TOUCH_X 3700
 #define MIN_TOUCH_X 300
-#define MAX_TOUCH_Y 3700
+#define MAX_TOUCH_Y 3800
 #define MIN_TOUCH_Y 200
 SPIClass touchscreenSPI = SPIClass(VSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
@@ -53,7 +54,7 @@ bool antiML = false, timeUpdate = false,
 timeBegin = false, apRun = false, swRun = false, swPause = false, swF = false;
 int waitUpdate = 0, swStart = 0, swFast = 0, swSlow = 0, swTime = 0, swPT = 0, bl = 128,
 leC[] = {0, 0, 0};
-float satFactor = 1.3;
+float satFactor = 2.4;
 String apSSID = "", apPass = "";
 
 void ledColor(int r, int g, int b) {
@@ -543,6 +544,7 @@ void clearTerminal() {
   for (int i = 0; i < 40; i++) {
     terminal[i] = "";
   }
+  terminalLine = 0;
   tft.fillScreen(TFT_BLACK);
 }
 
@@ -1333,7 +1335,7 @@ void fileExplorer() {
   SPI.end();
   
   bool isScrolling = false, isFolder = false;
-  int lastY = 0, scroll = 0, sel = 0, ffr = 120;
+  int lastY = 0, scroll = 0, sel = 0, ffr = 120, hld = false;
   String path = "/";
   String addedPath = "";
   String fileType = "";
@@ -1431,13 +1433,90 @@ void fileExplorer() {
     
     screen.drawLine(10, 70, 230, 70, TFT_WHITE);
     screen.drawLine(10, 230, 230, 230, TFT_WHITE);
-    
-    if (button(isFolder ? "Add Path" : "Open", 140, 246, 80)) {
-      if (isFolder && files[sel].substring(1) != "Failed to open directory") {
-        addedPath = files[sel].substring(1);
+    if (button("Remove", 95, 246, 50, isFolder ? TFT_DARKGREY : TFT_RED) && !isFolder) {
+      bool riel = true, idk = false;
+      while (riel) {
+        screen.fillScreen(TFT_BLACK);
+        screen.setTextColor(TFT_RED, TFT_BLACK);
+        screen.drawCentreString("!!! Warning !!!", 120, 120, 4);
+        screen.setTextColor(TFT_WHITE, TFT_BLACK);
+        screen.drawCentreString("This action can not be undo:", 120, 160, 2);
+        screen.drawCentreString("Remove: " + files[sel].substring(1), 120, 175, 2);
+        if (button("Delete!", 70, 200, 100, TFT_RED)) {riel = false; idk = true;}
+        if (button("Keep", 70, 250, 100, TFT_WHITE)) riel = false;
+        screen.pushSprite(0, 0);
       }
-      if (!isFolder && fileType == ".bpx") {
-        path += addedPath;
+      if (idk) {
+        int att = 0;
+        SD.end();
+        SPI.end();
+        while (!SD.begin(SD_CS, SPI, 4000000) && att < 5) {
+          screen.fillScreen(TFT_BLACK);
+          screen.drawString("SD Mount Failed! Retrying...", 0, 0, 1);
+          screen.drawString("attempt: " + String(att), 0, 8, 1);
+          screen.pushSprite(0, 0);
+          att++;
+          delay(1000);
+        }
+        if (att >= 5) {
+          touchscreenSPI.end();
+          touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+          touchscreen.begin(touchscreenSPI);
+          touchscreen.setRotation(SCREEN_ROTATION);
+          screen.setTextColor(TFT_WHITE, TFT_BLACK);
+          return;
+        }
+        SD.remove(path + "/" + files[sel].substring(1));
+
+        files = listDir(SD, path.c_str(), 0);
+        SD.end();
+        touchscreenSPI.end();
+        touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+        touchscreen.begin(touchscreenSPI);
+        touchscreen.setRotation(SCREEN_ROTATION);
+        screen.setTextColor(TFT_WHITE, TFT_BLACK);
+      }
+    }
+    if (button("Open", 170, 246, 50) && !hld) {
+      hld = true;
+      if (isFolder && files[sel].substring(1) != "Failed to open directory") {
+        //isFolder = true;
+        path += (path == "/" ? "" : "/") + files[sel].substring(1);
+        screen.fillScreen(TFT_BLACK);
+        SD.end();
+        SPI.end();
+        isScrolling = false;
+        isFolder = false;
+        lastY = 0;
+        scroll = 0;
+        sel = 0;
+        int att = 0;
+        while (!SD.begin(SD_CS, SPI, 4000000) && att < 5) {
+          screen.fillScreen(TFT_BLACK);
+          screen.drawString("SD Mount Failed! Retrying...", 0, 0, 1);
+          screen.drawString("attempt: " + String(att), 0, 8, 1);
+          screen.pushSprite(0, 0);
+          att++;
+          delay(1000);
+        }
+        if (att >= 5) {
+          touchscreenSPI.end();
+          touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+          touchscreen.begin(touchscreenSPI);
+          touchscreen.setRotation(SCREEN_ROTATION);
+          screen.setTextColor(TFT_WHITE, TFT_BLACK);
+          return;
+        }
+        files = listDir(SD, path.c_str(), 0);
+        SD.end();
+        touchscreenSPI.end();
+        touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+        touchscreen.begin(touchscreenSPI);
+        touchscreen.setRotation(SCREEN_ROTATION);
+        //break;
+      }
+      else if (!isFolder && fileType == ".bpx") {
+        Serial.println("Path: " + path + "/" + files[sel].substring(1));
         screen.fillScreen(TFT_BLACK);
         SD.end();
         SPI.end();
@@ -1459,7 +1538,7 @@ void fileExplorer() {
           return;
         }
         
-        File file = SD.open(path + selFile, FILE_READ);
+        File file = SD.open(path + "/" + files[sel].substring(1), FILE_READ);
         screen.fillScreen(TFT_BLACK);
         screen.setTextColor(TFT_WHITE, TFT_BLACK);
         screen.drawCentreString("Loading Image...", 120, 120, 4);
@@ -1494,8 +1573,8 @@ void fileExplorer() {
         touchscreen.setRotation(SCREEN_ROTATION);
         while (!touchscreen.touched()) delay(80);
       }      
-      if (!isFolder && fileType == ".ppd") {
-        path += addedPath;
+      else if (!isFolder && fileType == ".ppd") {
+        Serial.println("Path: " + path + "/" + files[sel].substring(1));
         screen.fillScreen(TFT_BLACK);
         SD.end();
         SPI.end();
@@ -1517,7 +1596,7 @@ void fileExplorer() {
           return;
         }
         
-        File file = SD.open(path + selFile, FILE_READ);
+        File file = SD.open(path + "/" + files[sel].substring(1), FILE_READ);
         screen.fillScreen(TFT_BLACK);
         screen.setTextColor(TFT_WHITE, TFT_BLACK);
         screen.drawCentreString("Loading Image...", 120, 120, 4);
@@ -1562,7 +1641,7 @@ void fileExplorer() {
         touchscreen.setRotation(SCREEN_ROTATION);
         while (!touchscreen.touched()) delay(80);
       }
-      if (!isFolder && fileType == ".txt") {
+      else if (!isFolder && fileType == ".txt") {
         path += addedPath;
         screen.fillScreen(TFT_BLACK);
         SD.end();
@@ -1675,10 +1754,22 @@ void fileExplorer() {
         touchscreen.begin(touchscreenSPI);
         touchscreen.setRotation(SCREEN_ROTATION);
       }
-    }
+    } else hld = false;
     
-    if (button("Reload Path", 20, 246, 80) && addedPath != "Failed to open directory") {
-      path += addedPath;
+    if (button("Return", 20, 246, 50)) {
+      // Loại bỏ phần thêm (addedPath) và cắt bỏ thư mục cuối
+      if (path.length() > 1) {
+        if (path.endsWith("/")) {
+          path = path.substring(0, path.length() - 1);
+        }
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash != -1) {
+          path = path.substring(0, lastSlash);
+          if (path == "") path = "/";
+        } else {
+          path = "/";
+        }
+      }
       screen.fillScreen(TFT_BLACK);
       SD.end();
       SPI.end();
@@ -1710,7 +1801,6 @@ void fileExplorer() {
       touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
       touchscreen.begin(touchscreenSPI);
       touchscreen.setRotation(SCREEN_ROTATION);
-      if (addedPath != "") path += "/";
       addedPath = "";
     }
     
@@ -1732,15 +1822,141 @@ void fileExplorer() {
       while (cng) {
         screen.fillScreen(TFT_BLACK);
         screen.setTextColor(TFT_WHITE, TFT_BLACK);
-        screen.drawString("Picture Color Boost: " + String(satFactor), 10, 120, 2);
-        screen.drawRect(10, 140, 220, 20, TFT_WHITE);
-        screen.fillRect(10 + sld, 140, 20, 20, TFT_WHITE);
+        screen.drawString("Picture Color Boost: " + String(satFactor), 10, 60, 2);
+        screen.drawRect(10, 80, 220, 20, TFT_WHITE);
+        screen.fillRect(10 + sld, 80, 20, 20, TFT_WHITE);
         if (touchscreen.touched()) {
           ffr = 120;
           TS_Point p = touchscreen.getPoint();
           int px = map(p.x, MIN_TOUCH_X, MAX_TOUCH_X, 1, SCREEN_WIDTH);
           int py = map(p.y, MIN_TOUCH_Y, MAX_TOUCH_Y, 1, SCREEN_HEIGHT);
-          if (140 < py && py < 160) sld = px - 10;
+          if (80 < py && py < 100) sld = px - 10;
+        }
+        screen.drawLine(20, 125, 220, 125, TFT_WHITE);
+        screen.drawLine(20, 235, 220, 235, TFT_WHITE);
+        screen.drawCentreString("Start WebServer", 120, 140, 4);
+        screen.drawCentreString("Upload files to your NoID", 120, 165, 2);
+        screen.drawCentreString("from computer / phone", 120, 180, 2);
+        if (button("Start", 70, 205, 100, TFT_WHITE, 2)) {
+          int att = 0;
+          screen.setTextColor(TFT_WHITE, TFT_BLACK);
+          SD.end();
+          SPI.end();
+          touchscreenSPI.end();
+          while (!SD.begin(SD_CS, SPI, 4000000) && att < 5) {
+            screen.fillScreen(TFT_BLACK);
+            screen.drawString("SD Mount Failed! Retrying...", 0, 0, 1);
+            screen.drawString("attempt: " + String(att), 0, 8, 1);
+            screen.pushSprite(0, 0);
+            att++;
+            delay(1000);
+          }
+          if (att >= 5) {
+            touchscreenSPI.end();
+            touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+            touchscreen.begin(touchscreenSPI);
+            touchscreen.setRotation(SCREEN_ROTATION);
+            screen.setTextColor(TFT_WHITE, TFT_BLACK);
+            return;
+          }
+          clearTerminal();
+          tft.fillScreen(TFT_BLACK);
+          int wstate = 0;
+          if (WiFi.status() == WL_CONNECTED) {terminalPrint("WiFi connected!"); wstate = 1;}
+          else if (apRun) {terminalPrint("AP Created!"); wstate = 0;}
+          else {
+            terminalPrint("No Connection found, suggest create an AP!");
+            touchscreenSPI.end();
+            touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+            touchscreen.begin(touchscreenSPI);
+            touchscreen.setRotation(SCREEN_ROTATION);
+            screen.setTextColor(TFT_WHITE, TFT_BLACK);
+            return;
+          }
+          terminalPrint("Creating WebServer...");
+          server.on("/", HTTP_GET, [](){
+            String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Upload File</title>";
+            html += "<style>";
+            html += "body { background-color: #000; color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }";
+            html += "h1 { font-size: 2.5em; margin-bottom: 0.2em; }";
+            html += "p { font-size: 1em; margin-top: 0; margin-bottom: 1em; }";
+            html += "form { display: flex; flex-direction: column; align-items: center; }";
+            html += "input[type='file'] { margin-bottom: 1em; }";
+            html += "input[type='submit'] { background-color: #fff; color: #000; border: none; padding: 0.5em 1em; font-size: 1em; cursor: pointer; }";
+            html += "input[type='submit']:hover { opacity: 0.8; }";
+            html += "</style></head><body>";
+            html += "<h1>Upload File</h1>";
+            html += "<p>to your NoID device</p>";
+            html += "<form action='/upload' method='POST' enctype='multipart/form-data'>";
+            html += "<input type='file' name='file'><br>";
+            html += "<input type='submit' value='Upload File'>";
+            html += "</form>";
+            html += "</body></html>";
+            server.send(200, "text/html", html);
+          });
+          server.on("/upload", HTTP_POST, [](){
+            server.send(200, "text/plain", "File uploaded successfully!");
+          }, [](){
+            HTTPUpload& upload = server.upload();
+            if (upload.status == UPLOAD_FILE_START) {
+              String filename = "/" + upload.filename;
+              terminalPrint("Uploading " + filename);
+              // Tạo file mới trên thẻ SD
+              File file = SD.open(filename, FILE_WRITE);
+              if (file) {
+                file.close();
+              } else {
+                terminalPrint("Failed to create file");
+              }
+            } else if (upload.status == UPLOAD_FILE_WRITE) {
+              if (SD.exists(upload.filename)) {
+                SD.remove(upload.filename);  // Xóa file cũ trước khi ghi mới
+              }
+              File file = SD.open("/" + upload.filename, FILE_APPEND);
+              if (file) {
+                file.write(upload.buf, upload.currentSize);
+                file.close();
+              } else {
+                terminalPrint("Failed to write to file");
+              }
+            } else if (upload.status == UPLOAD_FILE_END) {
+              terminalPrint("Upload End: " + (String)upload.totalSize);
+            }
+          });
+          server.begin();
+          terminalPrint("Server started! running at:");
+          if (wstate == 0) terminalPrint("192.168.4.1");
+          else terminalPrint(WiFi.localIP().toString());
+          while (digitalRead(0) == HIGH) {
+            delay(1);
+            server.handleClient();
+          }
+          int attempt = 0;
+          while (!SD.begin(SD_CS, SPI, 4000000) && attempt < 5) {
+            screen.fillScreen(TFT_BLACK);
+            screen.drawString("SD Mount Failed! Retrying...", 0, 0, 1);
+            screen.drawString("attempt: " + String(attempt), 0, 8, 1);
+            screen.pushSprite(0, 0);
+            attempt++;
+            delay(1000);
+          }
+          if (attempt >= 5) {
+            touchscreenSPI.end();
+            touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+            touchscreen.begin(touchscreenSPI);
+            touchscreen.setRotation(SCREEN_ROTATION);
+            screen.setTextColor(TFT_WHITE, TFT_BLACK);
+            return;
+          }
+
+          files = listDir(SD, path.c_str(), 0);
+          SD.end();
+          touchscreenSPI.end();
+          touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+          touchscreen.begin(touchscreenSPI);
+          touchscreen.setRotation(SCREEN_ROTATION);
+          screen.setTextColor(TFT_WHITE, TFT_BLACK);
+          server.stop();
         }
         sld = constrain(sld, 0, 200);
         satFactor = map(sld, 0, 200, 0, 100) / 10.00;
@@ -1942,7 +2158,8 @@ int miscMenu() {
     "Calculator",
     "Light Dependent Resistor",
     "Tone Pad",
-    "Touch Test"
+    "Touch Test",
+    "Web Browser"
   };
   bool hld = true;
   int py = 0, sel = -1;
@@ -1951,8 +2168,8 @@ int miscMenu() {
     screen.setTextColor(TFT_WHITE, TFT_BLACK);
     screen.drawString("Miscellaneous", 10, 40, 4);
     screen.drawLine(10, 70, 180, 70, TFT_WHITE);
-    for (int i = 0; i < 7; i++) {
-      int y = i * 16 + 100;
+    for (int i = 0; i < 8; i++) {
+      int y = i * 16 + 80;
       if (y < py && py < y + 16) {
         screen.setTextColor(TFT_BLACK, TFT_WHITE);
         screen.fillRect(10, y, 220, 16, TFT_WHITE);
@@ -2932,6 +3149,74 @@ void gameSnake() {
   } 
 }
 
+String extractText(String html) {
+  String text = "";
+  bool inTag = false;
+
+  for (int i = 0; i < html.length(); i++) {
+    char c = html[i];
+
+    if (c == '<') inTag = true; 
+    else if (c == '>') inTag = false;
+    else if (!inTag) text += c; 
+  }
+
+  text.replace("&nbsp;", " ");
+  text.replace("&amp;", "&");
+  
+  return text;
+}
+
+void fetchWebPage(const char* url) {
+  HTTPClient http;
+  Serial.println("[DEBUG] Bắt đầu fetch trang web...");
+  
+  http.begin(url);
+  http.setUserAgent("Mozilla/5.0 (Nokia3310; U; Mobile)");
+  
+  Serial.println("[DEBUG] Gửi yêu cầu GET...");
+  int httpCode = http.GET();
+  Serial.printf("[DEBUG] Mã phản hồi HTTP: %d\n", httpCode);
+  
+  if (httpCode > 0) {
+    WiFiClient* stream = http.getStreamPtr();
+    Serial.println("[DEBUG] Nhận nội dung trang web:");
+
+    String payload = "";
+    char buffer[128]; 
+    while (stream->available()) {
+      int len = stream->readBytes(buffer, sizeof(buffer) - 1);
+      buffer[len] = '\0';
+      payload += buffer;
+
+      if (payload.length() > 2048) break;
+    }
+
+    String cleanText = extractText(payload);
+    Serial.println(cleanText.substring(0, 1024));
+
+    int start = 0;
+    while (start < cleanText.length()) {
+      String line = cleanText.substring(start, start + 32);
+      terminalPrint(line);
+      start += 32;
+    }
+  } else {
+    Serial.println("[DEBUG] Failed to fetch page");
+  }
+
+  http.end();
+}
+
+void webBrowser() {
+  tft.fillScreen(TFT_BLACK);
+  clearTerminal();
+  terminalPrint("Fetching http://www.google.com");
+  fetchWebPage("http://www.example.com");
+  terminalPrint("Done!");
+  while (digitalRead(0) == HIGH) delay(100);
+}
+
 void setup() {
   Serial.begin(115200);
   WiFi.mode(WIFI_MODE_STA);
@@ -2998,6 +3283,7 @@ void loop() {
         case 4: miscLDR();    break;
         case 5: tonePad();    break;
         case 6: miscTouch();  break;
+        case 7: webBrowser(); break;
         default: break;
       }
       break;
@@ -3039,26 +3325,29 @@ make it become a powerful device
 and not just for some litte stupid thing
                                 - Khang238 -
 
------- NoID Pro 4.6.12 ------
+------ NoID Pro 4.7.02 ------
 Creator: Khang238
-Date: 16 - 03 - 2025
+Date: 04 - 04 - 2025
 
 ==== Changes ====
-* Fixing some bugs (visual problem when open Evil Twin)
-* New file formart: .bpx (byte pixel X - and i really have no ideal what X stand for)
-* Add progess bar when open image
-* Add blue light when device light slepping
+* Added ability to upload files from phone / PC to Esp32 via WebServer (i want to make this for a long time but i'm too lazy)
+* Changed the default value of "Picture Color Boost" to 2.4 (because why not)
+* Added "Touch Test" and "Web Browser" (Web Browser is not working yet so don't touch it)
+* Changed the way you interact with "Files":
+  - So, first, remove the "Reload Path" and "Add Path" (it sucks)
+  - Replace them with "Return" and "Open" only (because why not)
+  - Add new "Remove" button (it will be change to "Option" in the next update so you can do more than just remove)
+  - "Remove" button still have bug (like remove "n o t h i n g" when you open the emty folder), so don't touuch it (or simply just avoid using it in the wrong way)
 
-Developer Support:
-- Khang238:
-- ChatGPT (seriously, this is a great tool)
-- Copilot
-- Espessif
-- Arduino
+Thank For:
+- Khang238 (me, because why not)
+- ChatGPT (seriously)
+- Copilot (thank so much for suggest me some stupid compilation)
+- Espessif (for Esp32, they are not sponsoring me but highly recommend)
+- Arduino (because they use C++, efficient and not painful like python)
 (if you are another code and have some change to this, feel free to add your name here)
 
 NoID Program
 Device: - ESP32-2432S028R (a.k.a Cheap Yellow Display)
         - Or any ESP32 board, if you know what you are doing
-Language: C++ (Arduino)
 */
